@@ -159,7 +159,19 @@ public class ConnectorLocator extends AbstractJarFileModProvider implements IDep
     }
 
     private Stream<Path> scanModsDir(List<Path> excluded) {
-        return filterPaths(uncheck(() -> Files.list(FMLPaths.MODSDIR.get())), excluded);
+        try {
+            // Utiliza Files.walk para explorar a pasta mods e suas subpastas
+            return Files.walk(FMLPaths.MODSDIR.get())
+                    .filter(p -> !excluded.contains(p)
+                            && !p.toString().contains(".disabled") // Ignora caminhos que contenham ".disabled"
+                            && !p.toString().contains(".connector") // Ignora caminhos que contenham ".connector"
+                            && p.toString().toLowerCase().endsWith(SUFFIX))
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString().toLowerCase()))
+                    .filter(ConnectorLocator::isFabricModJar);
+        } catch (IOException e) {
+            LOGGER.error("Erro ao escanear diretório mods", e);
+            return Stream.empty(); // Retorna um stream vazio em caso de erro
+        }
     }
 
     private Stream<Path> filterPaths(Stream<Path> stream, List<Path> excluded) {
