@@ -66,6 +66,10 @@ public class ConnectorLocator extends AbstractJarFileModProvider implements IDep
 
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final MethodHandle MJM_INIT = uncheck(() -> MethodHandles.privateLookupIn(ModJarMetadata.class, MethodHandles.lookup()).findConstructor(ModJarMetadata.class, MethodType.methodType(void.class)));
+    private static final List<String> EXCLUDED_PATTERNS = Arrays.asList(
+            ".disabled",
+            ".connector"
+    );
 
     @Override
     public List<IModFile> scanMods(Iterable<IModFile> loadedMods) {
@@ -160,18 +164,24 @@ public class ConnectorLocator extends AbstractJarFileModProvider implements IDep
 
     private Stream<Path> scanModsDir(List<Path> excluded) {
         try {
-            // Utiliza Files.walk para explorar a pasta mods e suas subpastas
-            return Files.walk(FMLPaths.MODSDIR.get())
-                    .filter(p -> !excluded.contains(p)
-                            && !p.toString().contains(".disabled") // Ignora caminhos que contenham ".disabled"
-                            && !p.toString().contains(".connector") // Ignora caminhos que contenham ".connector"
-                            && p.toString().toLowerCase().endsWith(SUFFIX))
-                    .sorted(Comparator.comparing(path -> path.getFileName().toString().toLowerCase()))
+            Path modsDir = FMLPaths.MODSDIR.get();
+            return Files.walk(modsDir)
+                    .filter(this::isValidModPath)
+                    .filter(p -> !excluded.contains(p))
+                    .sorted(Comparator.comparing(path ->
+                            path.getFileName().toString().toLowerCase()))
                     .filter(ConnectorLocator::isFabricModJar);
         } catch (IOException e) {
             LOGGER.error("Erro ao escanear diretório mods", e);
-            return Stream.empty(); // Retorna um stream vazio em caso de erro
+            return Stream.empty();
         }
+    }
+
+    private boolean isValidModPath(Path path) {
+        String pathStr = path.toString().toLowerCase();
+        return pathStr.endsWith(SUFFIX) &&
+                EXCLUDED_PATTERNS.stream()
+                        .noneMatch(pattern -> pathStr.contains(pattern));
     }
 
     private Stream<Path> filterPaths(Stream<Path> stream, List<Path> excluded) {
